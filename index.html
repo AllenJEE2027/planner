@@ -2933,8 +2933,8 @@ function mountPlanner(CFG) {
   }
   function daysToJEE() { return dayDiff(pD(EXAM), pD(todayISO())); }
   function paintHead() {
-    var n = 60, h = document.querySelector(".brand h1"); if (!h) return;
-    h.innerHTML = 'JEE Main 2027: Plan to 99 Percentile in <span class="ring" title="A 60-day plan">' + n + '</span> days';
+    var n = daysToJEE(), h = document.querySelector(".brand h1"); if (!h) return;
+    h.innerHTML = n > 0 ? 'JEE Main 2027: Plan to 99 Percentile in <span class="ring" title="Days left until JEE Main on 20/01/2027">' + n + '</span> day' + (n === 1 ? '' : 's') : 'JEE Main 2027: Plan to 99 Percentile';
   }
   paintHead();
   var rpMsg = "";
