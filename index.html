@@ -2794,9 +2794,23 @@ function mountPlanner(CFG) {
 
 
   var WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], MN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  function dayHoursArr(startISO, n, dH, hW, hS) { var a = [], s = pD(startISO); for (var i = 0; i < n; i++) { var d = addD(s, i), v = dH && dH[iso(d)]; a.push(v != null ? +v : (d.getDay() === 0 ? hS : hW)); } return a; }
+  var DAY_MAX = 24, ALL_KEYS = ["physics-planner-v1", "maths-planner-v1", "chemistry-planner-v1"];
+  /* hours the OTHER two subjects have set for one date (read from their saved planners) */
+  function otherH(k) {
+    var sum = 0;
+    ALL_KEYS.forEach(function (key) {
+      if (key === KEY) return;
+      try {
+        var raw = window.localStorage.getItem(key); if (!raw) return; var o = JSON.parse(raw); if (!o || !o.start || k < o.start || k > END) return;
+        var v = o.dayH && o.dayH[k]; if (v == null) v = pD(k).getDay() === 0 ? o.hS : o.hW; v = +v; if (v > 0) sum += v;
+      } catch (e) { }
+    });
+    return sum;
+  }
+  /* hours per day for this subject; every day is capped so the three subjects together never exceed 24 h */
+  function dayHoursArr(startISO, n, dH, hW, hS) { var a = [], s = pD(startISO); for (var i = 0; i < n; i++) { var d = addD(s, i), k = iso(d), v = dH && dH[k]; v = v != null ? +v : (d.getDay() === 0 ? hS : hW); a.push(Math.max(0, Math.min(v, DAY_MAX - otherH(k)))); } return a; }
   function dfl(k) { return pD(k).getDay() === 0 ? S.hS : S.hW; }
-  function updTot() { var st = $("start").value, n = totalDays(st); if (!st || n < 1) { $("caltot").textContent = ""; return; } var t = dayHoursArr(st, n, S.dayH, S.hW, S.hS).reduce(function (a, b) { return a + b; }, 0); $("caltot").textContent = "Physics time available: " + fh(t) + " h across " + n + " days (until 19 Jan 2027)."; }
+  function updTot() { var st = $("start").value, n = totalDays(st); if (!st || n < 1) { $("caltot").textContent = ""; return; } var t = dayHoursArr(st, n, S.dayH, S.hW, S.hS).reduce(function (a, b) { return a + b; }, 0); $("caltot").textContent = SUBJ + " time available: " + fh(t) + " h across " + n + " days (until 19 Jan 2027). Physics, Maths and Chemistry together can use at most 24 h on any date."; }
   function buildCal() {
     var box = $("calbox"), st = $("start").value, n = totalDays(st);
     if (!st || n < 1) { box.innerHTML = '<p class="muted small">Pick a start date to see your calendar.</p>'; $("caltot").textContent = ""; return; }
@@ -2809,7 +2823,7 @@ function mountPlanner(CFG) {
         h += '<div class="calm"><h3>' + MN[d.getMonth()] + ' ' + d.getFullYear() + '</h3><div class="calg">' + ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(function (x) { return '<span class="calh">' + x + '</span>'; }).join('');
         for (var b = 0; b < (d.getDay() + 6) % 7; b++) h += '<span></span>';
       }
-      var ov = S.dayH[k] != null, val = ov ? S.dayH[k] : dfl(k), nt = S.dayN[k] || "", lbl = WD[d.getDay()] + " " + d.getDate() + " " + MN[d.getMonth()];
+      var ov = S.dayH[k] != null, val = Math.max(0, Math.min(ov ? S.dayH[k] : dfl(k), DAY_MAX - otherH(k))), nt = S.dayN[k] || "", lbl = WD[d.getDay()] + " " + d.getDate() + " " + MN[d.getMonth()];
       h += '<div class="cell' + (d.getDay() === 0 ? ' sun' : '') + (ov ? ' ov' : '') + '"><span class="dn">' + d.getDate() + '</span><input class="ch" type="number" min="0" max="16" step="0.5" inputmode="decimal" data-iso="' + k + '" value="' + val + '" aria-label="Physics hours on ' + lbl + '"><input class="cn" type="text" maxlength="24" placeholder="note" data-note="' + k + '" value="' + esc(nt) + '" aria-label="Note for ' + lbl + '"></div>';
     }
     box.innerHTML = h + '</div></div>'; updTot();
@@ -2819,9 +2833,11 @@ function mountPlanner(CFG) {
     if (k) {
       var v = parseFloat(t.value); if (t.value === "" || isNaN(v)) return;
       v = Math.max(0, Math.min(16, v));
+      var oth = otherH(k), room = Math.max(0, DAY_MAX - oth), capped = v > room + 1e-9; if (capped) { v = room; t.value = v; }
       if (Math.abs(v - dfl(k)) < 1e-9) delete S.dayH[k]; else S.dayH[k] = v;
       var c = t.closest(".cell"); if (c) c.classList.toggle("ov", S.dayH[k] != null);
       updTot();
+      if (capped) $("caltot").textContent = "Capped at " + fh(room) + " h on " + fd(pD(k)) + ": your other two subjects already use " + fh(oth) + " h that day, and the daily maximum is 24 h across all three subjects.";
     } else if (nk) { var s = t.value.trim(); if (s) S.dayN[nk] = s; else delete S.dayN[nk]; }
     save();
   });
@@ -2874,6 +2890,10 @@ function mountPlanner(CFG) {
     if (!(hw >= 0 && hw <= 16)) { err.textContent = "Weekday hours must be between 0 and 16."; $("hw").focus(); return; }
     if (!(hs >= 0 && hs <= 16)) { err.textContent = "Sunday hours must be between 0 and 16."; $("hs").focus(); return; }
     if (dayHoursArr(start, days, S.dayH, hw, hs).reduce(function (a, b) { return a + b; }, 0) < 5) { err.textContent = "Your calendar has less than 5 hours of " + SUBJ + " time in total. Add more hours."; return; }
+    for (var q = 0; q < days; q++) {
+      var dq = addD(pD(start), q), kq = iso(dq), rawq = S.dayH && S.dayH[kq] != null ? +S.dayH[kq] : (dq.getDay() === 0 ? hs : hw), othq = otherH(kq);
+      if (rawq + othq > DAY_MAX + 1e-9) { err.textContent = "On " + fd(dq) + " your three subjects add up to " + fh(rawq + othq) + " h (" + SUBJ + " " + fh(rawq) + " h + other subjects " + fh(othq) + " h). The maximum is 24 h per day in total. Lower the hours for " + SUBJ + " on that date or in the other subject."; return; }
+    }
     if (!(buffer >= 0 && buffer < days)) { err.textContent = "Buffer days must be 0 or more, and fewer than your total days."; $("buffer").focus(); return; }
     err.textContent = "";
     var over = {}; root.querySelectorAll("[data-ch]").forEach(function (i) { over[i.getAttribute("data-ch")] = clampv(i.value); });
@@ -2933,8 +2953,8 @@ function mountPlanner(CFG) {
   }
   function daysToJEE() { return dayDiff(pD(EXAM), pD(todayISO())); }
   function paintHead() {
-    var n = daysToJEE(), h = document.querySelector(".brand h1"); if (!h) return;
-    h.innerHTML = n > 0 ? 'JEE Main 2027: Plan to 99 Percentile in <span class="ring" title="Days left until JEE Main on 20/01/2027">' + n + '</span> day' + (n === 1 ? '' : 's') : 'JEE Main 2027: Plan to 99 Percentile';
+    var n = Math.min(60, daysToJEE()), h = document.querySelector(".brand h1"); if (!h) return;
+    h.innerHTML = n > 0 ? 'JEE Main 2027: Plan to 99 Percentile in <span class="ring" title="Days left until JEE Main on 20/01/2027 (the headline never shows more than 60)">' + n + '</span> day' + (n === 1 ? '' : 's') : 'JEE Main 2027: Plan to 99 Percentile';
   }
   paintHead();
   var rpMsg = "";
