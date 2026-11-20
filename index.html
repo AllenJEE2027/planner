@@ -561,9 +561,9 @@ html,body{background:#fff!important}
   }
   function build() {
     layers = [
-      mk(11, KINDS, 4, 3, 1300, 860, .62, .34, 1.4, -5, 3, false),
-      mk(23, KINDS, 3, 2, 1500, 920, .95, .62, 0, -11, 6, true),
-      mk(37, KINDS, 2, 2, 1500, 900, 1.45, .2, 3.2, -22, 12, false)
+      mk(11, KINDS, 3, 2, 1300, 860, .62, .34, 1.4, -5, 3, false),
+      mk(23, KINDS, 2, 2, 1500, 920, .95, .62, 0, -11, 6, true),
+      mk(37, KINDS, 2, 1, 1500, 900, 1.45, .2, 3.2, -22, 12, false)
     ];
     layers.forEach(function (l) { if (!l.live) l.items.forEach(function (it) { sprite(l, it); }); });
   }
